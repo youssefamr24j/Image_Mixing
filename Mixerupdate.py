@@ -5,7 +5,7 @@
 # Created by: PyQt5 UI code generator 5.9.2
 #
 # WARNING! All changes made in this file will be lost!
-
+import logging
 import cv2
 from PyQt5 import QtCore, QtGui, QtWidgets
 from pyqtgraph import PlotWidget
@@ -13,7 +13,9 @@ import numpy as np
 import pyqtgraph as pg
 from scipy.fftpack import fft,fft2,fftn,fftshift,ifft2
 from numpy.fft import fft,fftfreq,ifft,fft2,fftn,fftshift,ifft2
+from operator import add
 
+logging.basicConfig(filename='AppSimulation.log',level=logging.INFO ,format='%(message)s where levelname is%(levelname)s ')
 
 class Image:
     def __init__(self):
@@ -73,8 +75,11 @@ class Image:
         self.setPhase()
         Image.setMagnitude()
         Image.setPhase()
-        Mix=((((W1)*(self.getMagnitude()))+((1-W1)*(Image.getMagnitude())))*(np.exp((((W2)*(Image.getPhase()))+((1-W2)*(self.getPhase()))))))
+        TempMagnitude=list(map(add, ((W1)*(np.array(self.getMagnitude()))),((1-W1)*(np.array(Image.getMagnitude())))))
+        TempPhase=np.exp(list(map(add, ((W2)*(np.array(Image.getPhase()))), ((1-W2)*(np.array(self.getPhase())))) ))
+        Mix=[a*b for a,b in zip(TempMagnitude,TempPhase)]
         View = ifft2(Mix)
+        View =np.real(View)
         View = pg.ImageItem(View)
         return View
 
@@ -83,10 +88,9 @@ class Image:
         self.setPhase()
         Image.setMagnitude()
         Image.setPhase()
-        UniTemp=Image.getPhase()
-        for i in range (len(UniTemp)):
-            UniTemp[i]=0
-        Mix=((((W1)*(self.getMagnitude()))+((1-W1)*(Image.getMagnitude())))*(np.exp((((W2)*(UniTemp))+((1-W2)*(self.getPhase()))))))  
+        TempMagnitude=list(map(add, ((W1)*(np.array(self.getMagnitude()))),((1-W1)*(np.array(Image.getMagnitude())))) )
+        TempPhase=np.exp(list(map(add, ((0)*(np.array(Image.getPhase()))), ((1-W2)*(np.array(self.getPhase())))) ))
+        Mix=[a*b for a,b in zip(TempMagnitude,TempPhase)]   
         View=ifft2(Mix)
         View = pg.ImageItem(View)
         return View  
@@ -99,7 +103,9 @@ class Image:
         UniTemp=Image.getMagnitude()
         for i in range (len(UniTemp)):
             UniTemp[i]=1
-        Mix=((((W1)*(self.getMagnitude()))+((1-W1)*(UniTemp)))*(np.exp((((W2)*(Image.getPhase()))+((1-W2)*(self.getPhase())))))) 
+        TempMagnitude=list(map(add, ((W1)*(np.array(UniTemp))),((1-W1)*(np.array(Image.getMagnitude())))) )
+        TempPhase=np.exp(list(map(add, ((W2)*(np.array(Image.getPhase()))), ((1-W2)*(np.array(self.getPhase())))) ))
+        Mix=[a*b for a,b in zip(TempMagnitude,TempPhase)]
         View=ifft2(Mix)
         View = pg.ImageItem(View)
         return View       
@@ -114,7 +120,9 @@ class Image:
         for i in range (len(UniTempMag)):
             UniTempMag[i]=1
             UniTempPhase[i]=0
-        Mix=((((W1)*(UniTempMag))+((1-W1)*(Image.getMagnitude())))*(np.exp((((W2)*(UniTempPhase))+((1-W2)*(self.getPhase()))))))
+        TempMagnitude=list(map(add, ((W1)*(np.array(UniTempMag))),((1-W1)*(np.array(Image.getMagnitude())))) )
+        TempPhase=np.exp(list(map(add, ((W2)*(np.array(UniTempPhase))), ((1-W2)*(np.array(self.getPhase())))) ))
+        Mix=[a*b for a,b in zip(TempMagnitude,TempPhase)]
         View=ifft2(Mix)
         View = pg.ImageItem(View)
         return View
@@ -124,9 +132,11 @@ class Image:
         self.setImaginary()
         Image.setReal()
         Image.setImaginary()
-        MixReal = (W1 * (self.ImageObject.getReal()) + (1-W1) * (Image.getReal())) 
-        MixImag = (W2 * (Image.getImaginary()) + (1-W2) * (self.ImageObject.getImaginary()))
-        ComplexMix=complex(MixReal,MixImag)
+        TempReal =list(map(add, ((W1) * np.array((self.ImageObject.getReal()))), ((1-W1) * np.array(Image.getReal()))) ) 
+        TempImag =list(map(add, ((W2) * np.array((Image.getImaginary()))), ((1-W2) * np.array((self.ImageObject.getImaginary())))) ) 
+        CompleteMix=[]
+        for i in (len(self.ImageObject)):
+            CompleteMix.append(complex(TempReal[i],TempImag[i]))
         View=ifft2(ComplexMix)
         View = pg.ImageItem(View)
         return View
@@ -448,10 +458,12 @@ class Ui_MainWindow(object):
     def InsertImage(self,i):
         filename=QtWidgets.QFileDialog.getOpenFileName()
         directory=filename[0]
+        self.SizeError.setText(" ")
         self.ImageArr[i].SetImage(directory)
         if(self.IMG1.CheckEmpty() or self.IMG2.CheckEmpty()):
             self.SimpleComboBoxArr[i].setEnabled(True)
             self.ImageDisplayArr[i].addItem(self.ImageArr[i].DisplayImage())
+            logging.info('Image:{} is added'.format(i+1))
         else:
             if((self.IMG1.CheckEqual(self.IMG2))):
                 self.SimpleComboBoxArr[i].setEnabled(True)
@@ -463,10 +475,12 @@ class Ui_MainWindow(object):
                 self.Slider1.setEnabled(True)
                 self.Slider2.setEnabled(True)
                 self.ImageDisplayArr[i].addItem(self.ImageArr[i].DisplayImage())
+                logging.info('Image:{} is added'.format(i+1))
             else:
                 self.ImageArr[i].EmptyImage()
-                self.SizeError.setText("SIZE ERROR!!! insert image of the same size")
+                self.SizeError.setText("     SIZE ERROR!!! insert image of the same size")
                 self.SizeError.setStyleSheet('color: red')
+                logging.error('the user did not insert image of the same size ')
 
 
                 
@@ -479,12 +493,16 @@ class Ui_MainWindow(object):
     def ImageComponent(self,i):
         if(self.SimpleComboBoxArr[i].currentIndex() == 1 ):
             self.SimpleGraphicsViewArr[i].addItem(self.ImageArr[i].DisplayImageMag())
+            logging.info('the user choose Magnitude to view of image {} '.format(i+1))
         elif(self.SimpleComboBoxArr[i].currentIndex() == 2 ):
             self.SimpleGraphicsViewArr[i].addItem(self.ImageArr[i].DisplayImagePhase())
+            logging.info('the user choose Phase to view of image {} '.format(i+1))
         elif(self.SimpleComboBoxArr[i].currentIndex() == 3 ):
             self.SimpleGraphicsViewArr[i].addItem(self.ImageArr[i].DisplayImageReal())
+            logging.info('the user choose Real to view of image {} '.format(i+1))
         elif(self.SimpleComboBoxArr[i].currentIndex() == 4 ):
             self.SimpleGraphicsViewArr[i].addItem(self.ImageArr[i].DisplayImageImag())
+            logging.info('the user choose Imaginary to view of image {} '.format(i+1))
         
     
 
@@ -518,54 +536,74 @@ class Ui_MainWindow(object):
 
     def ManageComboBox(self,i1,i2):
         if(self.ComplexComboBoxArr[i1].currentIndex() == 0 ):
+            self.ComplexComboBoxArr[i1].clear()
+            self.ComplexComboBoxArr[i1].addItems(self.FourierPlusArr)
             self.ComplexComboBoxArr[i2].clear()
             self.ComplexComboBoxArr[i2].addItems(self.FourierPlusArr)
+            logging.info('the user returned the two combobox to their intial state')
         else:
-            if(self.ComplexComboBoxArr[i2].currentIndex() == 0 ):
+            if(self.ComplexComboBoxArr[i2].currentIndex() == 0 or self.ComplexComboBoxArr[i2].count() < 7 ):
                 if(self.ComplexComboBoxArr[i1].currentIndex() == 1  or self.ComplexComboBoxArr[i1].currentIndex() == 5 ):
                     self.ComplexComboBoxArr[i2].clear()
-                    self.ComplexComboBoxArr[i2].addItems(self.PhaseArr)    
+                    self.ComplexComboBoxArr[i2].addItems(self.PhaseArr)
+                    # logging.info('the user choose Magnitude/UniMagnitue of image {} to mix with Phase/UniPhase of image {}'.format(i1+1,i2+1))    
                 elif(self.ComplexComboBoxArr[i1].currentIndex() == 2 or self.ComplexComboBoxArr[i1].currentIndex() == 6 ):
                     self.ComplexComboBoxArr[i2].clear()
                     self.ComplexComboBoxArr[i2].addItems(self.MagnitudeArr)
+                    # logging.info('the user choose Phase/UniPhase of image {} to mix with Magnitude/UniMagnitue of image {}'.format(i1+1,i2+1))
                 elif(self.ComplexComboBoxArr[i1].currentIndex() == 3 ):
                     self.ComplexComboBoxArr[i2].clear()
-                    self.ComplexComboBoxArr[i2].addItem(self.ChooseImaginaryArr)
+                    self.ComplexComboBoxArr[i2].addItems(self.ChooseImaginaryArr)
+                    # logging.info('the user choose the real part of image {} to mix with the imaginary part of image {}'.format(i1+1,i2+1))
                 elif(self.ComplexComboBoxArr[i1].currentIndex() == 4 ):
                     self.ComplexComboBoxArr[i2].clear()
-                    self.ComplexComboBoxArr[i2].addItem(self.ChooseRealArr)
+                    self.ComplexComboBoxArr[i2].addItems(self.ChooseRealArr)
+                    # logging.info('the user choose the imaginary part of image {} to mix with the real part of image {}'.format(i1+1,i2+1))
        
 
 
 
     def ChooseMixer(self,i,i1,i2):
         W1=self.Slider1.value()
-        W2=self.Slider2.value() 
+        W2=self.Slider2.value()
+        W1=(W1/100)
+        W2=(W2/100)  
         ViewValue=pg.ImageItem()
         if(str(self.Component1ComboBox.currentText()) == "Magnitude"):
             if(str(self.Component2ComboBox.currentText()) == "Phase"):
                 ViewValue=self.ImageArr[i1].MixingMagPhase(self.ImageArr[i2],W1,W2)
+                logging.info('the user choose to mix {} %, of the magnitude of image {} with {} %, of the phase of image {}'.format(W1*100,i1+1,W2*100,i2+1))
             elif(str(self.Component1ComboBox.currentText()) == "UniPhase"):
                 ViewValue=self.ImageArr[i1].MixingMagPhase(self.ImageArr[i2],W1,W2)
+                logging.info('the user choose to mix {} %, of the magnitude of image {} with {} %, of the uniphase of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         elif(str(self.Component1ComboBox.currentText()) == "Phase"):
             if(str(self.Component2ComboBox.currentText()) == "Magnitude"):
                 ViewValue=self.ImageArr[i2].MixingMagPhase(self.ImageArr[i1],W2,W1)
+                logging.info('the user choose to mix {} %, of the phase of image {} with {} %, of the magnitude of image {}'.format(W1*100,i1+1,W2*100,i2+1))
             elif(str(self.Component1ComboBox.currentText()) == "UniMagnitude"):
                 ViewValue=self.ImageArr[i2].MixingMagPhase(self.ImageArr[i1],W2,W1)
+                logging.info('the user choose to mix {} %, of the phase of image {} with {} %, of the unimagnitude of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         elif(str(self.Component1ComboBox.currentText()) == "UniMagnitude"):
             if(str(self.Component2ComboBox.currentText()) == "Phase"):
                ViewValue=self.ImageArr[i1].MixingMagPhase(self.ImageArr[i2],W1,W2)
+               logging.info('the user choose to mix {} %, of the unimagnitude of image {} with {} %, of the phase of image {}'.format(W1*100,i1+1,W2*100,i2+1))
             elif(str(self.Component1ComboBox.currentText()) == "UniPhase"):
                 ViewValue=self.ImageArr[i1].MixingMagPhase(self.ImageArr[i2],W1,W2)
+                logging.info('the user choose to mix {} %, of the unimagnitude of image {} with {} %, of the uniphase of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         elif(str(self.Component1ComboBox.currentText()) == "UniPhase"):
             if(str(self.Component2ComboBox.currentText()) == "Magnitude"):
                 ViewValue=self.ImageArr[i2].MixingMagPhase(self.ImageArr[i1],W2,W1)
+                logging.info('the user choose to mix {} %, of the uniphase of image {} with {} %, of the magnitude of image {}'.format(W1*100,i1+1,W2*100,i2+1))
             elif(str(self.Component1ComboBox.currentText()) == "UniMagnitude"):
                 ViewValue=self.ImageArr[i2].MixingMagPhase(self.ImageArr[i1],W2,W1)
+                logging.info('the user choose to mix {} %, of the uniphase of image {} with {} %, of the unimagnitude of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         elif(str(self.Component1ComboBox.currentText()) == "Real"):
             ViewValue=self.ImageArr[i1].MixingMagPhase(self.ImageArr[i2],W1,W2)
+            logging.info('the user choose to mix {} %, of the real part of image {} with {} %, of the imaginary part of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         elif(str(self.Component1ComboBox.currentText()) == "Imaginary"):
             ViewValue=self.ImageArr[i2].MixingMagPhase(self.ImageArr[i1],W2,W1)
+            logging.info('the user choose to mix {} %, of the imaginary part of image {} with {} %, of the real part of image {}'.format(W1*100,i1+1,W2*100,i2+1))
         self.OutputArr[i].addItem(ViewValue)
+        logging.info('output displayed in output {} port '.format(i+1))
             
             
